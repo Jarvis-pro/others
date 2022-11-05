@@ -1,0 +1,43 @@
+#PBS -N M3
+#PBS -l nodes=1:ppn=24
+#PBS -q batch
+#PBS -V
+#PBS -S /bin/bash 
+### Set intel environment###
+source /opt/intel/composer_xe_2015/bin/compilervars.sh intel64
+source /opt/intel/mkl/bin/intel64/mklvars_intel64.sh
+source /opt/intel/impi/5.0.2.044/bin64/mpivars.sh
+
+vasp_start_time=`date`
+
+
+#运行vasp
+cd $PBS_O_WORKDIR
+EXEC=/home/xuliang-stu/opt/vasp.vtst.5.4.4/bin/vasp_std
+NP=`cat $PBS_NODEFILE | wc -l`
+NN=`cat $PBS_NODEFILE | sort | uniq | tee /tmp/nodes.$$ | wc -l`
+cat $PBS_NODEFILE > /tmp/nodefile.$$
+mpirun -genv I_MPI_DEVICE ssm -machinefile /tmp/nodefile.$$ -n $NP $EXEC > out.log
+rm -rf /tmp/nodefile.$$
+rm -rf /tmp/nodes.$$
+
+#获取结束时间
+vasp_end_time=`date`
+
+cp /home/xuliang-stu/bin/python_mail.py .
+
+# 将时间和目录写入文件
+T="任务开始时间：$vasp_start_time;任务结束时间：$vasp_end_time ;任务执行所在文件夹：$adress "
+S="$PBS_JOBNAME:$PBS_JOBID"
+sed -i "s/message/$T/g" python_mail.py
+sed -i "s/mailtext/$S/g" python_mail.py
+sed -i "10i mail=\'$mail\'" python_mail.py
+
+echo $T >> out.log
+
+#执行发送邮件脚本
+ssh mu01 "cd $adress ; python python_mail.py"
+
+#初始化脚本
+#rm python_mail.py
+#rm qsub.sh
