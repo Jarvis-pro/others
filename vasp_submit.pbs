@@ -1,0 +1,103 @@
+#!/bin/bash
+#PBS -N vasp
+#PBS -S /bin/bash
+#PBS -l nodes=1:ppn=28
+#PBS -j oe
+#PBS -l walltime=20000:00:00
+#PBS -q middle
+
+vasp_start_time=`date`
+
+Adress=$PBS_O_WORKDIR ; mail='1148646360@qq.com'
+
+ulimit -s unlimited
+
+cd $PBS_O_WORKDIR
+source /public/software/profile.d/compiler_intel-compiler-2017.5.239.sh
+
+# get ncores
+NP=$(cat $PBS_NODEFILE|wc -l)
+
+for i in {0..10}
+do
+
+cd $PBS_O_WORKDIR/$i/relax
+$HOME/kwluo/bin/mpich2/bin/mpirun \
+  -np $NP -hostfile $PBS_NODEFILE $HOME/opt/vasp.5.4.4.vtst/bin/vasp_std 2>&1|tee vasp.out
+
+cp CONTCAR POSCAR
+$HOME/kwluo/bin/mpich2/bin/mpirun \
+  -np $NP -hostfile $PBS_NODEFILE $HOME/opt/vasp.5.4.4.vtst/bin/vasp_std 2>&1|tee vasp.out
+
+cd ..
+mkdir her
+cd her
+mkdir relax freq
+cd ../relax
+cp INCAR KPOINTS ../her/relax
+cp CONTCAR ../her/relax/POSCAR
+cd ../her/relax
+
+sed -i "6c C N Mn H" POSCAR
+sed -i "7c 55 3 1 1" POSCAR
+e=0.0001
+e2=0.07
+a=`sed -n "68, 1p" POSCAR | awk '{print $1}'`
+a1=`echo $a $e | awk '{printf("%0.16f\n",$1+$2)}'`
+b=`sed -n "68, 1p" POSCAR | awk '{print $2}'`
+b1=`echo $b $e | awk '{printf("%0.16f\n",$1+$2)}'`
+c=`sed -n "68, 1p" POSCAR | awk '{print $3}'`
+c1=`echo $c $e2 | awk '{printf("%0.16f\n",$1+$2)}'`
+sed -i "69i $a1 $b1 $c1 T T T" POSCAR
+Cat_vasp.sh
+
+$HOME/kwluo/bin/mpich2/bin/mpirun \
+  -np $NP -hostfile $PBS_NODEFILE $HOME/opt/vasp.5.4.4.vtst/bin/vasp_std 2>&1|tee vasp.out
+
+cp KPOINTS POTCAR ../freq
+cp CONTCAR ../freq/POSCAR
+cd ../freq
+cp /public/home/gcxyuserd/tsh/tool/INCAR_freq ./INCAR
+echo -e "402 \n 1 \n 3 \n C N Mn \n all" | vaspkit
+cp POSCAR_FIX POSCAR
+
+$HOME/kwluo/bin/mpich2/bin/mpirun \
+  -np $NP -hostfile $PBS_NODEFILE $HOME/opt/vasp.5.4.4.vtst/bin/vasp_std 2>&1|tee vasp.out
+
+vasp_end_time=`date`
+
+cp /public/home/gcxyuserd/bin/python_mail.py .
+
+adress=`pwd`
+
+ # 将时间和目录写入文件
+T="任务开始时间：$vasp_start_time；任务结束时间：$vasp_end_time ；任务执行所在文件夹：$adress "
+sed -i "19i \"html\": \"赣州：$T\"" python_mail.py
+sed -i "18i \"subject\" : \"$PBS_JOBNAME:$PBS_JOBID\"," python_mail.py
+sed -i "10i mail=\'$mail\'" python_mail.py
+
+
+#执行发送邮件脚本
+ssh mu01 "cd $adress ; python python_mail.py"
+
+done
+
+cd $PBS_O_WORKDIR
+
+#获取结束时间
+vasp_end_time=`date`
+
+cp /public/home/gcxyuserd/bin/python_mail.py .
+
+# 将时间和目录写入文件
+T="任务开始时间：$vasp_start_time；任务结束时间：$vasp_end_time ；任务执行所在文件夹：$Adress "
+sed -i "19i \"html\": \"赣州：$T\"" python_mail.py
+sed -i "18i \"subject\" : \"$PBS_JOBNAME:$PBS_JOBID\"," python_mail.py
+sed -i "10i mail=\'$mail\'" python_mail.py
+
+#执行发送邮件脚本
+ssh admin1 "cd $adress ; python python_mail.py"
+
+#初始化脚本
+rm python_mail.py
+rm qsub.sh
