@@ -9,3 +9,6 @@
 
 ## runvasp_mail.sh/vasp_mail.pbs
 两个都是服务器提交任务脚本，任务结束可将日志文件发送到邮箱。前者用于小型服务器，后者用于没有开通邮件服务的超算，需配合sendcloud的api使用。
+
+## vasp_submit.sh
+实现全自动化批量计算HER，只需提交slab的POSCAR。slab优化→活性位点吸附氢原子→优化→自由能矫正→邮件提醒。
